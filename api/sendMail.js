@@ -20,7 +20,7 @@ export default async function handler(req, res) {
       from: process.env.GMAIL_USER,
       to: email,
       subject: `ISS Yeni Refakat Formu : ${name}`,
-      text: message,
+      html: message,
     });
 
     res.status(200).json({ success: true });
