@@ -1,15 +1,11 @@
 import nodemailer from 'nodemailer';
+import pdf from 'html-pdf';
 
 export default async function handler(req, res) {
-  // CORS headers ekle - EN BAŞTA
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  
-  // Preflight request (OPTIONS) için
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Only POST allowed' });
@@ -17,7 +13,6 @@ export default async function handler(req, res) {
 
   const { name, email, message, attachments = [] } = req.body;
 
-  // Temel validation
   if (!name || !email || !message) {
     return res.status(400).json({ error: 'Name, email ve message alanları zorunludur' });
   }
@@ -31,38 +26,50 @@ export default async function handler(req, res) {
       }
     });
 
-    // Attachment'ları hazırla ve validate et
-    const mailAttachments = attachments
-      .filter(attachment => attachment.content && attachment.filename && attachment.cid)
-      .map(attachment => ({
-        filename: attachment.filename,
-        content: attachment.content.replace(/^data:image\/[a-z]+;base64,/, ''), // Base64 prefix'i temizle
-        encoding: 'base64',
-        cid: attachment.cid // Content-ID için
+    // 📄 PDF oluştur: HTML'den PDF'yi oluştur
+    const pdfBuffer = await new Promise((resolve, reject) => {
+      pdf.create(message, { format: 'A4', border: '20px' }).toBuffer((err, buffer) => {
+        if (err) reject(err);
+        else resolve(buffer);
+      });
+    });
+
+    // ✂ Görsel attachment'ları (imzalar varsa)
+    const imageAttachments = attachments
+      .filter(att => att.content && att.filename)
+      .map(att => ({
+        filename: att.filename,
+        content: att.content.replace(/^data:image\/[a-z]+;base64,/, ''),
+        encoding: 'base64'
       }));
+
+    // 📎 PDF'i de ekle
+    imageAttachments.push({
+      filename: 'refakat-form.pdf',
+      content: pdfBuffer,
+      contentType: 'application/pdf'
+    });
 
     const mailOptions = {
       from: process.env.GMAIL_USER,
       to: email,
-      subject: `ISS Yeni Refakat Formu : ${name}`,
-      html: message,
-      attachments: mailAttachments
+      subject: `ISS Refakat Formu PDF: ${name}`,
+      text: 'Ekli PDF dosyasında form ve imzalar bulunmaktadır.',
+      attachments: imageAttachments
     };
 
-    console.log(`Mail gönderiliyor: ${email}, Attachment sayısı: ${mailAttachments.length}`);
-    
     await transporter.sendMail(mailOptions);
 
-    res.status(200).json({ 
-      success: true, 
-      attachmentCount: mailAttachments.length,
-      message: 'E-posta başarıyla gönderildi'
+    res.status(200).json({
+      success: true,
+      attachmentCount: imageAttachments.length,
+      message: 'PDF ekli e-posta başarıyla gönderildi.'
     });
   } catch (err) {
     console.error('Mail gönderim hatası:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'E-posta gönderimi başarısız.',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+      details: err.message
     });
   }
 }
