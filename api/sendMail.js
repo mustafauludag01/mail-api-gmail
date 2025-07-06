@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
-import puppeteer from 'puppeteer';
+import chromium from 'chrome-aws-lambda';
+import puppeteer from 'puppeteer-core';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -18,18 +19,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD
-      }
+    const browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath,
+      headless: chromium.headless
     });
 
-    // 📄 HTML → PDF (puppeteer)
-    const browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
     const page = await browser.newPage();
     await page.setContent(message, { waitUntil: 'networkidle0' });
 
@@ -45,6 +41,14 @@ export default async function handler(req, res) {
     });
 
     await browser.close();
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD
+      }
+    });
 
     const mailOptions = {
       from: process.env.GMAIL_USER,
@@ -64,7 +68,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({
       success: true,
-      message: 'PDF başarıyla üretildi ve sadece ek olarak gönderildi.'
+      message: 'PDF başarıyla üretildi ve e-posta ile gönderildi.'
     });
   } catch (err) {
     console.error('Mail gönderim hatası:', err);
