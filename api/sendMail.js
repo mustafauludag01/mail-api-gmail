@@ -48,9 +48,9 @@ export default async function handler(req, res) {
       console.log('- Original content length:', content?.length || 0);
       console.log('- Starts with data?', content?.startsWith('data:'));
       
-      // Eğer data URI ise prefix'i kaldır
+      // Eğer data URI ise prefix'i kaldır (hem virgüllü hem virgülsüz)
       if (content.startsWith('data:')) {
-        content = content.replace(/^data:[^;]+;base64,/, '');
+        content = content.replace(/^data:[^,]*,?/, '');
         console.log('- After removing prefix length:', content.length);
       }
       
