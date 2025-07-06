@@ -1,65 +1,23 @@
 import nodemailer from 'nodemailer';
-import chromium from '@sparticuz/chromium';
-import puppeteer from 'puppeteer-core';
 
 export default async function handler(req, res) {
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Only POST allowed' });
   }
 
-  const { name, email, message, attachments = [] } = req.body;
-
-  if (!name || !email || !message) {
-    return res.status(400).json({ error: 'Name, email ve message alanları zorunludur' });
+  const { name, email, subject, message, attachments = [] } = req.body;
+  if (!name || !email || !subject || !message) {
+    return res.status(400).json({ error: 'name, email, subject ve message alanları zorunludur' });
   }
 
   try {
-    // Puppeteer ile PDF üretimi - Vercel için optimize edilmiş
-    const browser = await puppeteer.launch({
-      args: [
-        ...chromium.args,
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding',
-        '--disable-features=TranslateUI',
-        '--disable-ipc-flooding-protection'
-      ],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-      ignoreHTTPSErrors: true
-    });
-
-    const page = await browser.newPage();
-    await page.setContent(message, { waitUntil: 'networkidle0' });
-
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: {
-        top: '20mm',
-        bottom: '20mm',
-        left: '15mm',
-        right: '15mm'
-      }
-    });
-
-    await browser.close();
-
-    // E-posta gönderimi
+    // Nodemailer transporter
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -68,47 +26,41 @@ export default async function handler(req, res) {
       }
     });
 
-    // Attachment'ları hazırla
-    const emailAttachments = [];
-    
-    // PDF'i ekle
-    emailAttachments.push({
-      filename: 'refakat-form.pdf',
-      content: pdfBuffer,
-      contentType: 'application/pdf'
+    // Gelen attachment'leri Nodemailer formatına çevir
+    const mailAttachments = attachments.map(att => {
+      // att.contentType örn. 'application/pdf' veya 'image/png'
+      let content = att.content;
+      // Eğer image/png gibi data URI ise prefix'i kaldır
+      if (att.contentType.startsWith('image/') && content.startsWith('data:')) {
+        content = content.replace(/^data:image\/[a-z]+;base64,/, '');
+      }
+      return {
+        filename: att.filename,
+        content: content,
+        encoding: 'base64',
+        contentType: att.contentType
+      };
     });
 
-    // İmza dosyalarını ekle (varsa)
-    if (attachments && attachments.length > 0) {
-      attachments.forEach(att => {
-        if (att.content && att.filename) {
-          emailAttachments.push({
-            filename: att.filename,
-            content: att.content.replace(/^data:image\/[a-z]+;base64,/, ''),
-            encoding: 'base64'
-          });
-        }
-      });
-    }
-
+    // Mail seçenekleri
     const mailOptions = {
       from: process.env.GMAIL_USER,
       to: email,
-      subject: `ISS Refakat Formu PDF: ${name}`,
-      text: 'Ekli PDF dosyasında refakat formu ve imzalar yer almaktadır.',
-      attachments: emailAttachments
+      subject: subject,
+      html: message,
+      attachments: mailAttachments
     };
 
     await transporter.sendMail(mailOptions);
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      attachmentCount: emailAttachments.length,
-      message: 'PDF başarıyla üretildi ve e-posta ile gönderildi.'
+      message: 'E-posta başarıyla gönderildi.',
+      attachmentCount: mailAttachments.length
     });
   } catch (err) {
     console.error('Mail gönderim hatası:', err);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'E-posta gönderimi başarısız.',
       details: err.message
     });
