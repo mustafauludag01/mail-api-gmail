@@ -11,7 +11,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "chrome-aws-lambda": "^10.1.0",
-    "nodemailer": "^7.0.4"
+    "@sparticuz/chromium": "^119.0.2",
+    "nodemailer": "^7.0.4",
+    "puppeteer-core": "^21.11.0"
   }
 }
