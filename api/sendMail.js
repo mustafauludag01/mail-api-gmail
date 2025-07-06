@@ -31,8 +31,8 @@ export default async function handler(req, res) {
       // att.contentType örn. 'application/pdf' veya 'image/png'
       let content = att.content;
       // Eğer image/png gibi data URI ise prefix'i kaldır
-      if (att.contentType.startsWith('image/') && content.startsWith('data:')) {
-        content = content.replace(/^data:image\/[a-z]+;base64,/, '');
+      if (content.startsWith('data:')) {
+        content = content.replace(/^data:[^;]+;base64,/, '');
       }
       return {
         filename: att.filename,
