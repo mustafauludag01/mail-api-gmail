@@ -12,8 +12,6 @@
   "description": "",
   "dependencies": {
     "chrome-aws-lambda": "^10.1.0",
-    "html-pdf": "^3.0.1",
-    "nodemailer": "^7.0.4",
-    "puppeteer-core": "^10.4.0"
+    "nodemailer": "^7.0.4"
   }
 }
